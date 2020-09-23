@@ -69,10 +69,10 @@ public class TelemetryReporter {
     this.telemetryRegistry = telemetryRegistry;
     this.metricsRegistry = metricsRegistry;
     this.telemetryRequestTimeout = telemetryRequestTimeout;
-    initTelemetrySendingTask();
+    initTelemetrySendingTask(false);
   }
 
-  protected void initTelemetrySendingTask() {
+  protected void initTelemetrySendingTask(boolean sendInitialMessage) {
     telemetrySendingTask = new TelemetrySendingTask(commandExecutor,
                                                     telemetryEndpoint,
                                                     telemetryRequestRetries,
@@ -80,12 +80,13 @@ public class TelemetryReporter {
                                                     httpConnector,
                                                     telemetryRegistry,
                                                     metricsRegistry,
-                                                    telemetryRequestTimeout);
+                                                    telemetryRequestTimeout,
+                                                    sendInitialMessage);
   }
 
-  public synchronized void start() {
-    if (!isScheduled()) { // initialize timer if only the the timer is not scheduled yet
-      initTelemetrySendingTask();
+  public synchronized void start(boolean sendInitialMessage) {
+    if (!isScheduled()) { // initialize timer only if not scheduled yet
+      initTelemetrySendingTask(sendInitialMessage);
 
       timer = new Timer("Camunda BPM Runtime Telemetry Reporter", true);
       long reportingIntervalInMillis =  reportingIntervalInSeconds * 1000;
@@ -102,7 +103,7 @@ public class TelemetryReporter {
 
   public synchronized void reschedule() {
     stop(false);
-    start();
+    start(false);
   }
 
   public synchronized void stop() {

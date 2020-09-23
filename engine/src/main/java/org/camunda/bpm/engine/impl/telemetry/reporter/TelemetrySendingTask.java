@@ -53,6 +53,7 @@ import org.camunda.bpm.engine.impl.telemetry.dto.Command;
 import org.camunda.bpm.engine.impl.telemetry.dto.Data;
 import org.camunda.bpm.engine.impl.telemetry.dto.Internals;
 import org.camunda.bpm.engine.impl.telemetry.dto.Metric;
+import org.camunda.bpm.engine.impl.telemetry.dto.Product;
 import org.camunda.bpm.engine.impl.util.ClockUtil;
 import org.camunda.bpm.engine.impl.util.JsonUtil;
 import org.camunda.bpm.engine.impl.util.TelemetryUtil;
@@ -80,6 +81,7 @@ public class TelemetrySendingTask extends TimerTask {
   protected TelemetryRegistry telemetryRegistry;
   protected MetricsRegistry metricsRegistry;
   protected int telemetryRequestTimeout;
+  protected boolean sendInitialMessage;
 
   public TelemetrySendingTask(CommandExecutor commandExecutor,
                               String telemetryEndpoint,
@@ -88,7 +90,8 @@ public class TelemetrySendingTask extends TimerTask {
                               Connector<? extends ConnectorRequest<?>> httpConnector,
                               TelemetryRegistry telemetryRegistry,
                               MetricsRegistry metricsRegistry,
-                              int telemetryRequestTimeout) {
+                              int telemetryRequestTimeout,
+                              boolean sendInitialMessage) {
     this.commandExecutor = commandExecutor;
     this.telemetryEndpoint = telemetryEndpoint;
     this.telemetryRequestRetries = telemetryRequestRetries;
@@ -97,11 +100,16 @@ public class TelemetrySendingTask extends TimerTask {
     this.telemetryRegistry = telemetryRegistry;
     this.metricsRegistry = metricsRegistry;
     this.telemetryRequestTimeout = telemetryRequestTimeout;
+    this.sendInitialMessage = sendInitialMessage;
   }
 
   @Override
   public void run() {
     LOG.startTelemetrySendingTask();
+
+    if (sendInitialMessage) {
+      sendInitialMessage();
+    }
 
     if (!isTelemetryEnabled()) {
       LOG.telemetryDisabled();
@@ -137,12 +145,38 @@ public class TelemetrySendingTask extends TimerTask {
     } while (!requestSuccessful && triesLeft > 0);
   }
 
+  protected void sendInitialMessage() {
+    int triesLeft = telemetryRequestRetries + 1;
+    boolean requestSuccessful = false;
+    do {
+      try {
+        triesLeft--;
+
+        Data initData = new Data(staticData.getInstallation(), new Product(staticData.getProduct()));
+        Internals internals = new Internals();
+        internals.setTelemetryEnabled(commandExecutor.execute(new IsTelemetryEnabledCmd()));
+        initData.getProduct().setInternals(internals);
+
+        sendData(initData);
+
+        requestSuccessful = true;
+        sendInitialMessage = false;
+      } catch (Exception e) {
+        LOG.exceptionWhileSendingTelemetryData(e);
+      }
+    } while (!requestSuccessful && triesLeft > 0);
+  }
+
   protected void updateStaticData() {
     Internals internals = staticData.getProduct().getInternals();
 
     if (internals.getApplicationServer() == null) {
       ApplicationServer applicationServer = telemetryRegistry.getApplicationServer();
       internals.setApplicationServer(applicationServer);
+    }
+
+    if (internals.getTelemetryEnabled() == null) {
+      internals.setTelemetryEnabled(true);// this can only be true, otherwise we would not collect data to send
     }
 
     // license key data is fed from the outside to the registry but needs to be constantly updated

@@ -48,8 +48,10 @@ import org.camunda.bpm.engine.ProcessEngines;
 import org.camunda.bpm.engine.RuntimeService;
 import org.camunda.bpm.engine.TaskService;
 import org.camunda.bpm.engine.history.UserOperationLogEntry;
+import org.camunda.bpm.engine.impl.BootstrapEngineCommand;
 import org.camunda.bpm.engine.impl.cfg.ProcessEngineConfigurationImpl;
 import org.camunda.bpm.engine.impl.cfg.StandaloneInMemProcessEngineConfiguration;
+import org.camunda.bpm.engine.impl.interceptor.CommandContext;
 import org.camunda.bpm.engine.impl.metrics.Meter;
 import org.camunda.bpm.engine.impl.telemetry.dto.ApplicationServer;
 import org.camunda.bpm.engine.impl.telemetry.dto.Command;
@@ -108,7 +110,15 @@ public class TelemetryReporterTest {
           configuration
             .setTelemetryEndpoint(TELEMETRY_ENDPOINT)
             .setTelemetryReporterActivate(true)
-            );
+            .setProcessEngineBootstrapCommand(new BootstrapEngineCommand() {
+                @Override
+                protected void createTelemetryProperty(CommandContext commandContext) {
+                  super.createTelemetryProperty(commandContext);
+                  // do not create initial message in these tests
+                  this.sendInitialTelemetryMessage = false;
+                }
+            })
+      );
 
   protected ProcessEngineRule engineRule = new ProvidedProcessEngineRule(bootstrapRule);
   protected ProcessEngineTestRule testRule = new ProcessEngineTestRule(engineRule);
@@ -233,6 +243,127 @@ public class TelemetryReporterTest {
     // then
     verify(postRequestedFor(urlEqualTo(TELEMETRY_ENDPOINT_PATH))
               .withHeader("Content-Type",  equalTo("application/json")));
+  }
+
+  @Test
+  public void shouldReportInitialDataWhenReporterActivatedAndInitTelemetryUndefined() {
+    // given
+    ProcessEngineConfigurationImpl processEngineConfiguration = new StandaloneInMemProcessEngineConfiguration();
+    processEngineConfiguration
+        .setTelemetryEndpoint(TELEMETRY_ENDPOINT)
+        .setJdbcUrl("jdbc:h2:mem:camunda" + getClass().getSimpleName());
+    stubFor(post(urlEqualTo(TELEMETRY_ENDPOINT_PATH))
+            .willReturn(aResponse()
+                        .withStatus(HttpURLConnection.HTTP_ACCEPTED)));
+    standaloneProcessEngine = processEngineConfiguration.buildProcessEngine();
+
+    Data expectedData = createInitialDataToSend(processEngineConfiguration.getTelemetryData(), null);
+    String requestBody = new Gson().toJson(expectedData);
+
+    // when
+    processEngineConfiguration.getTelemetryReporter().reportNow();
+
+    // then
+    verify(postRequestedFor(urlEqualTo(TELEMETRY_ENDPOINT_PATH))
+              .withRequestBody(equalToJson(requestBody, JSONCompareMode.LENIENT))
+              .withHeader("Content-Type",  equalTo("application/json")));
+  }
+
+  @Test
+  public void shouldReportInitialDataWhenReporterActivatedAndInitTelemetryDisabled() {
+    // given
+    ProcessEngineConfigurationImpl processEngineConfiguration = new StandaloneInMemProcessEngineConfiguration();
+    processEngineConfiguration
+        .setTelemetryEndpoint(TELEMETRY_ENDPOINT)
+        .setInitializeTelemetry(false)
+        .setJdbcUrl("jdbc:h2:mem:camunda" + getClass().getSimpleName());
+    stubFor(post(urlEqualTo(TELEMETRY_ENDPOINT_PATH))
+            .willReturn(aResponse()
+                        .withStatus(HttpURLConnection.HTTP_ACCEPTED)));
+    standaloneProcessEngine = processEngineConfiguration.buildProcessEngine();
+
+    Data expectedData = createInitialDataToSend(processEngineConfiguration.getTelemetryData(), false);
+    String requestBody = new Gson().toJson(expectedData);
+
+    // when
+    processEngineConfiguration.getTelemetryReporter().reportNow();
+
+    // then
+    verify(postRequestedFor(urlEqualTo(TELEMETRY_ENDPOINT_PATH))
+              .withRequestBody(equalToJson(requestBody, JSONCompareMode.LENIENT))
+              .withHeader("Content-Type",  equalTo("application/json")));
+  }
+
+  @Test
+  public void shouldReportInitialDataWhenReporterActivatedAndInitTelemetryEnabled() {
+    // given
+    ProcessEngineConfigurationImpl processEngineConfiguration = new StandaloneInMemProcessEngineConfiguration();
+    processEngineConfiguration
+        .setTelemetryEndpoint(TELEMETRY_ENDPOINT)
+        .setInitializeTelemetry(true)
+        .setJdbcUrl("jdbc:h2:mem:camunda" + getClass().getSimpleName());
+    stubFor(post(urlEqualTo(TELEMETRY_ENDPOINT_PATH))
+            .willReturn(aResponse()
+                        .withStatus(HttpURLConnection.HTTP_ACCEPTED)));
+    standaloneProcessEngine = processEngineConfiguration.buildProcessEngine();
+
+    Data expectedData = createInitialDataToSend(processEngineConfiguration.getTelemetryData(), true);
+    String requestBody = new Gson().toJson(expectedData);
+
+    // when
+    processEngineConfiguration.getTelemetryReporter().reportNow();
+
+    // then
+    verify(postRequestedFor(urlEqualTo(TELEMETRY_ENDPOINT_PATH))
+              .withRequestBody(equalToJson(requestBody, JSONCompareMode.LENIENT))
+              .withHeader("Content-Type",  equalTo("application/json")));
+  }
+
+  @Test
+  public void shouldReportInitialDataOnlyOnce() {
+    // given
+    ProcessEngineConfigurationImpl processEngineConfiguration = new StandaloneInMemProcessEngineConfiguration();
+    processEngineConfiguration
+        .setTelemetryEndpoint(TELEMETRY_ENDPOINT)
+        .setInitializeTelemetry(false)
+        .setJdbcUrl("jdbc:h2:mem:camunda" + getClass().getSimpleName());
+    stubFor(post(urlEqualTo(TELEMETRY_ENDPOINT_PATH))
+            .willReturn(aResponse()
+                        .withStatus(HttpURLConnection.HTTP_ACCEPTED)));
+    standaloneProcessEngine = processEngineConfiguration.buildProcessEngine();
+
+    Data expectedData = createInitialDataToSend(processEngineConfiguration.getTelemetryData(), false);
+    String requestBody = new Gson().toJson(expectedData);
+
+    processEngineConfiguration.getTelemetryReporter().reportNow();
+
+    // when
+    processEngineConfiguration.getTelemetryReporter().reportNow();
+
+    // then
+    verify(1, postRequestedFor(urlEqualTo(TELEMETRY_ENDPOINT_PATH))
+              .withRequestBody(equalToJson(requestBody, JSONCompareMode.LENIENT))
+              .withHeader("Content-Type",  equalTo("application/json")));
+  }
+
+  @Test
+  public void shouldNotReportInitialDataWhenReporterDeactivated() {
+    // given
+    ProcessEngineConfigurationImpl processEngineConfiguration = new StandaloneInMemProcessEngineConfiguration();
+    processEngineConfiguration
+        .setTelemetryEndpoint(TELEMETRY_ENDPOINT)
+        .setTelemetryReporterActivate(false)
+        .setJdbcUrl("jdbc:h2:mem:camunda" + getClass().getSimpleName());
+    stubFor(post(urlEqualTo(TELEMETRY_ENDPOINT_PATH))
+            .willReturn(aResponse()
+                        .withStatus(HttpURLConnection.HTTP_ACCEPTED)));
+    standaloneProcessEngine = processEngineConfiguration.buildProcessEngine();
+
+    // when
+    processEngineConfiguration.getTelemetryReporter().reportNow();
+
+    // then
+    verify(0, postRequestedFor(urlEqualTo(TELEMETRY_ENDPOINT_PATH)));
   }
 
   @Test
@@ -793,6 +924,7 @@ public class TelemetryReporterTest {
     Database database = new Database("mySpecialDb", "v.1.2.3");
     Jdk jdk = ParseUtil.parseJdkDetails();
     Internals internals = new Internals(database, new ApplicationServer("Apache Tomcat/10.0.1"), null, jdk);
+    internals.setTelemetryEnabled(true);
 
     Map<String, Command> commands = getDefaultCommandCounts();
     internals.setCommands(commands);
@@ -803,6 +935,15 @@ public class TelemetryReporterTest {
     Product product = new Product("Runtime", "7.14.0", "special", internals);
     Data data = new Data("f5b19e2e-b49a-11ea-b3de-0242ac130004", product);
     return data;
+  }
+
+  protected Data createInitialDataToSend(Data telemetryData, Boolean telemetryEnabled) {
+    Data result = initData(telemetryData);
+    Internals internals = new Internals();
+    internals.setTelemetryEnabled(telemetryEnabled);
+    result.getProduct().setInternals(internals);
+
+    return result;
   }
 
   protected Data adjustDataWithAppServerInfo(Data telemetryData, String applicationServerVersion) {
@@ -878,7 +1019,9 @@ public class TelemetryReporterTest {
   }
 
   protected Data initData(Data telemetryData) {
-    return new Data(telemetryData.getInstallation(), new Product(telemetryData.getProduct()));
+    Data data = new Data(telemetryData.getInstallation(), new Product(telemetryData.getProduct()));
+    data.getProduct().getInternals().setTelemetryEnabled(true);
+    return data;
   }
 
   protected Map<String, Metric> assembleMetrics(long processCount, long decisionElementsCount, long decisionInstancesCount, long activityInstanceCount, long workerCount) {

@@ -49,6 +49,8 @@ public class BootstrapEngineCommand implements ProcessEngineBootstrapCommand {
   protected static final String TELEMETRY_PROPERTY_NAME = "camunda.telemetry.enabled";
   protected static final String INSTALLATION_PROPERTY_NAME = "camunda.installation.id";
 
+  protected boolean sendInitialTelemetryMessage = false;
+
   @Override
   public Void execute(CommandContext commandContext) {
 
@@ -163,6 +165,7 @@ public class BootstrapEngineCommand implements ProcessEngineBootstrapCommand {
     }
     commandContext.getPropertyManager().insert(property);
     LOG.creatingTelemetryPropertyInDatabase(telemetryEnabled);
+    sendInitialTelemetryMessage = true;
   }
 
   public void initializeInstallationId(CommandContext commandContext) {
@@ -241,7 +244,7 @@ public class BootstrapEngineCommand implements ProcessEngineBootstrapCommand {
     // was enabled by another engine in the cluster.
     if (telemetryReporter != null && telemetryReporterActivate) {
       try {
-        telemetryReporter.start();
+        telemetryReporter.start(sendInitialTelemetryMessage);
       } catch (Exception e) {
         ProcessEngineLogger.TELEMETRY_LOGGER.schedulingTaskFailsOnEngineStart(e);
       }

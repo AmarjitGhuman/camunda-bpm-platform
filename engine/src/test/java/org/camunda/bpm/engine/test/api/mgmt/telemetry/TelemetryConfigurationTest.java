@@ -199,12 +199,12 @@ public class TelemetryConfigurationTest {
     // when
     inMemoryConfiguration.getTelemetryReporter().reportNow();
 
-    // then
+    // then the initial message and the report message will fail
     assertThat(loggingRule
         .getFilteredLog("Could not send telemetry data. Reason: "
             + "ConnectorRequestException with message 'HTCL-02007 Unable to execute HTTP request'")
         .size())
-        .isOne();
+        .isEqualTo(2);
   }
 
 }
