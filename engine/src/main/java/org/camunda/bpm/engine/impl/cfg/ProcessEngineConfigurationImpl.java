@@ -4855,8 +4855,9 @@ public abstract class ProcessEngineConfigurationImpl extends ProcessEngineConfig
     return telemetryHttpConnector;
   }
 
-  public void setTelemetryHttpConnector(Connector<? extends ConnectorRequest<?>> telemetryHttp) {
+  public ProcessEngineConfigurationImpl setTelemetryHttpConnector(Connector<? extends ConnectorRequest<?>> telemetryHttp) {
     this.telemetryHttpConnector = telemetryHttp;
+    return this;
   }
 
   public Data getTelemetryData() {
