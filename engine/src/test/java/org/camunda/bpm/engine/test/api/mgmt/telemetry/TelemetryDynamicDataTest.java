@@ -26,13 +26,13 @@ import org.camunda.bpm.engine.ProcessEngines;
 import org.camunda.bpm.engine.RuntimeService;
 import org.camunda.bpm.engine.TaskService;
 import org.camunda.bpm.engine.impl.cfg.ProcessEngineConfigurationImpl;
-import org.camunda.bpm.engine.impl.cfg.StandaloneInMemProcessEngineConfiguration;
 import org.camunda.bpm.engine.impl.metrics.Meter;
 import org.camunda.bpm.engine.impl.telemetry.CommandCounter;
 import org.camunda.bpm.engine.impl.telemetry.TelemetryRegistry;
 import org.camunda.bpm.engine.task.Task;
 import org.camunda.bpm.engine.test.Deployment;
 import org.camunda.bpm.engine.test.ProcessEngineRule;
+import org.camunda.bpm.engine.test.util.NoInitMessageInMemProcessEngineConfiguration;
 import org.camunda.bpm.engine.test.util.ProvidedProcessEngineRule;
 import org.junit.After;
 import org.junit.Before;
@@ -94,7 +94,7 @@ public class TelemetryDynamicDataTest {
   @Test
   public void shouldCountCommandsFromEngineStart() {
     // when
-    processEngineInMem =  new StandaloneInMemProcessEngineConfiguration()
+    processEngineInMem =  new NoInitMessageInMemProcessEngineConfiguration()
         .setJdbcUrl("jdbc:h2:mem:camunda" + getClass().getSimpleName())
         .setInitializeTelemetry(true)
         .buildProcessEngine();
@@ -104,7 +104,7 @@ public class TelemetryDynamicDataTest {
     Map<String, CommandCounter> entries = telemetryRegistry.getCommands();
     assertThat(entries.size()).isEqualTo(2);
     assertThat(entries.keySet()).containsExactlyInAnyOrder(
-        "BootstrapEngineCommand",
+        "NoInitMessageBootstrapEngineCommand",
         "GetLicenseKeyCmd");
     for (String commandName : entries.keySet()) {
       assertThat(entries.get(commandName).get()).isEqualTo(1);

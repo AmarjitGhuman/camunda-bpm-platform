@@ -24,8 +24,8 @@ import org.camunda.bpm.engine.ProcessEngine;
 import org.camunda.bpm.engine.ProcessEngineConfiguration;
 import org.camunda.bpm.engine.impl.ProcessEngineImpl;
 import org.camunda.bpm.engine.impl.cfg.ProcessEngineConfigurationImpl;
-import org.camunda.bpm.engine.impl.cfg.StandaloneInMemProcessEngineConfiguration;
 import org.camunda.bpm.engine.impl.telemetry.dto.LicenseKeyData;
+import org.camunda.bpm.engine.test.util.NoInitMessageInMemProcessEngineConfiguration;
 import org.camunda.commons.testing.ProcessEngineLoggingRule;
 import org.camunda.commons.testing.WatchLogger;
 import org.junit.After;
@@ -63,7 +63,7 @@ public class TelemetryConfigurationTest {
   @Test
   public void shouldStartEngineWithTelemetryDisabled() {
     // given
-    inMemoryConfiguration = new StandaloneInMemProcessEngineConfiguration();
+    inMemoryConfiguration = new NoInitMessageInMemProcessEngineConfiguration();
     inMemoryConfiguration
         .setJdbcUrl("jdbc:h2:mem:camunda" + getClass().getSimpleName())
         .setInitializeTelemetry(false);
@@ -85,7 +85,7 @@ public class TelemetryConfigurationTest {
   @Test
   public void shouldStartEngineWithTelemetryEnabled() {
     // given
-    inMemoryConfiguration = new StandaloneInMemProcessEngineConfiguration();
+    inMemoryConfiguration = new NoInitMessageInMemProcessEngineConfiguration();
     inMemoryConfiguration
         .setJdbcUrl("jdbc:h2:mem:camunda" + getClass().getSimpleName())
         .setTelemetryEndpoint(TELEMETRY_ENDPOINT)
@@ -104,7 +104,7 @@ public class TelemetryConfigurationTest {
   @Test
   public void shouldStartEngineWithChangedTelemetryEndpoint() {
     // given
-    inMemoryConfiguration = new StandaloneInMemProcessEngineConfiguration();
+    inMemoryConfiguration = new NoInitMessageInMemProcessEngineConfiguration();
     inMemoryConfiguration
         .setJdbcUrl("jdbc:h2:mem:camunda" + getClass().getSimpleName())
         .setTelemetryEndpoint(TELEMETRY_ENDPOINT);
@@ -120,7 +120,7 @@ public class TelemetryConfigurationTest {
   public void shouldStartEngineWithTelemetryEnabledAndLicenseKeyAlreadyPresent() {
     // given license key persisted
     String testLicenseKey = "signature=;my company;unlimited";
-    inMemoryConfiguration = new StandaloneInMemProcessEngineConfiguration();
+    inMemoryConfiguration = new NoInitMessageInMemProcessEngineConfiguration();
     inMemoryConfiguration
         .setJdbcUrl("jdbc:h2:mem:camunda-test" + getClass().getSimpleName())
         // keep data alive at process engine close
@@ -150,7 +150,7 @@ public class TelemetryConfigurationTest {
   public void shouldLogDefaultTelemetryValue() {
     // given
     Boolean telemetryInitializedValue = null;
-    inMemoryConfiguration = new StandaloneInMemProcessEngineConfiguration();
+    inMemoryConfiguration = new NoInitMessageInMemProcessEngineConfiguration();
     inMemoryConfiguration
         .setJdbcUrl("jdbc:h2:mem:camunda" + getClass().getSimpleName());
 
@@ -166,7 +166,7 @@ public class TelemetryConfigurationTest {
   public void shouldLogTelemetryPersistenceLog() {
     // given
     boolean telemetryInitialized = true;
-    inMemoryConfiguration = new StandaloneInMemProcessEngineConfiguration();
+    inMemoryConfiguration = new NoInitMessageInMemProcessEngineConfiguration();
     inMemoryConfiguration
         .setInitializeTelemetry(telemetryInitialized)
         .setJdbcUrl("jdbc:h2:mem:camunda" + getClass().getSimpleName());
@@ -185,7 +185,7 @@ public class TelemetryConfigurationTest {
     // given
     wireMockServer = new WireMockServer(WireMockConfiguration.wireMockConfig().port(8085));
     wireMockServer.start();
-    inMemoryConfiguration = new StandaloneInMemProcessEngineConfiguration();
+    inMemoryConfiguration = new NoInitMessageInMemProcessEngineConfiguration();
     inMemoryConfiguration
         .setJdbcUrl("jdbc:h2:mem:camunda" + getClass().getSimpleName())
         .setInitializeTelemetry(true)
@@ -199,12 +199,12 @@ public class TelemetryConfigurationTest {
     // when
     inMemoryConfiguration.getTelemetryReporter().reportNow();
 
-    // then the initial message and the report message will fail
+    // then
     assertThat(loggingRule
         .getFilteredLog("Could not send telemetry data. Reason: "
             + "ConnectorRequestException with message 'HTCL-02007 Unable to execute HTTP request'")
         .size())
-        .isEqualTo(2);
+        .isOne();
   }
 
 }

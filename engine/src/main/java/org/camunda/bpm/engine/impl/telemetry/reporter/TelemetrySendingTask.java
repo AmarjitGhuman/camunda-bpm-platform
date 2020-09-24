@@ -131,7 +131,7 @@ public class TelemetrySendingTask extends TimerTask {
         mergedData.mergeInternals(dynamicData);
 
         try {
-          sendData(mergedData);
+          sendData(mergedData, false);
         } catch (Exception e) {
           // so that we send it again the next time
           restoreDynamicData(dynamicData);
@@ -140,7 +140,7 @@ public class TelemetrySendingTask extends TimerTask {
 
         requestSuccessful = true;
       } catch (Exception e) {
-        LOG.exceptionWhileSendingTelemetryData(e);
+        LOG.exceptionWhileSendingTelemetryData(e, false);
       }
     } while (!requestSuccessful && triesLeft > 0);
   }
@@ -157,12 +157,12 @@ public class TelemetrySendingTask extends TimerTask {
         internals.setTelemetryEnabled(commandExecutor.execute(new IsTelemetryEnabledCmd()));
         initData.getProduct().setInternals(internals);
 
-        sendData(initData);
+        sendData(initData, true);
 
         requestSuccessful = true;
         sendInitialMessage = false;
       } catch (Exception e) {
-        LOG.exceptionWhileSendingTelemetryData(e);
+        LOG.exceptionWhileSendingTelemetryData(e, true);
       }
     } while (!requestSuccessful && triesLeft > 0);
   }
@@ -189,7 +189,7 @@ public class TelemetrySendingTask extends TimerTask {
     return telemetryEnabled != null && telemetryEnabled.booleanValue();
   }
 
-  protected void sendData(Data dataToSend) {
+  protected void sendData(Data dataToSend, boolean isInitialMessage) {
 
       String telemetryData = JsonUtil.asString(dataToSend);
       Map<String, Object> requestParams = assembleRequestParameters(METHOD_NAME_POST,
@@ -201,23 +201,23 @@ public class TelemetrySendingTask extends TimerTask {
       ConnectorRequest<?> request = httpConnector.createRequest();
       request.setRequestParameters(requestParams);
 
-      LOG.sendingTelemetryData(telemetryData);
+      LOG.sendingTelemetryData(telemetryData, isInitialMessage);
       CloseableConnectorResponse response = (CloseableConnectorResponse) request.execute();
 
       if (response == null) {
-        LOG.unexpectedResponseWhileSendingTelemetryData();
+        LOG.unexpectedResponseWhileSendingTelemetryData(isInitialMessage);
       } else {
         int responseCode = (int) response.getResponseParameter(PARAM_NAME_RESPONSE_STATUS_CODE);
 
         if (isSuccessStatusCode(responseCode)) {
           if (responseCode != HttpURLConnection.HTTP_ACCEPTED) {
-            LOG.unexpectedResponseSuccessCode(responseCode);
+            LOG.unexpectedResponseSuccessCode(responseCode, isInitialMessage);
           }
 
-          LOG.telemetrySentSuccessfully();
+          LOG.telemetrySentSuccessfully(isInitialMessage);
 
         } else {
-          throw LOG.unexpectedResponseWhileSendingTelemetryData(responseCode);
+          throw LOG.unexpectedResponseWhileSendingTelemetryData(responseCode, isInitialMessage);
         }
       }
   }
