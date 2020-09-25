@@ -47,6 +47,7 @@ public class BootstrapEngineCommand implements ProcessEngineBootstrapCommand {
   private final static EnginePersistenceLogger LOG = ProcessEngineLogger.PERSISTENCE_LOGGER;
 
   protected static final String TELEMETRY_PROPERTY_NAME = "camunda.telemetry.enabled";
+  protected static final String TELEMETRY_INIT_MESSAGE_SENT_NAME = "camunda.telemetry.initial.message.sent";
   protected static final String INSTALLATION_PROPERTY_NAME = "camunda.installation.id";
 
   protected boolean sendInitialTelemetryMessage = false;
@@ -118,11 +119,15 @@ public class BootstrapEngineCommand implements ProcessEngineBootstrapCommand {
 
       acquireExclusiveTelemetryLock(commandContext);
       PropertyEntity databaseTelemetryProperty = databaseTelemetryConfiguration(commandContext);
+      PropertyEntity databaseTelemetryInitMessageProperty = databaseTelemetryInitialMessageSent(commandContext);
 
       ProcessEngineConfigurationImpl processEngineConfiguration = commandContext.getProcessEngineConfiguration();
       if (databaseTelemetryProperty == null) {
         LOG.noTelemetryPropertyFound();
         createTelemetryProperty(commandContext);
+      } else if (databaseTelemetryInitMessageProperty == null) {
+        // we need to still send an initial message because it didn't happen yet
+        sendInitialTelemetryMessage = true;
       }
 
       // enable collecting dynamic data in case telemetry is initialized with true
@@ -151,6 +156,15 @@ public class BootstrapEngineCommand implements ProcessEngineBootstrapCommand {
       return commandContext.getPropertyManager().findPropertyById(TELEMETRY_PROPERTY_NAME);
     } catch (Exception e) {
       LOG.errorFetchingTelemetryPropertyInDatabase(e);
+      return null;
+    }
+  }
+
+  protected PropertyEntity databaseTelemetryInitialMessageSent(CommandContext commandContext) {
+    try {
+      return commandContext.getPropertyManager().findPropertyById(TELEMETRY_INIT_MESSAGE_SENT_NAME);
+    } catch (Exception e) {
+      LOG.errorFetchingTelemetryInitialMessagePropertyInDatabase(e);
       return null;
     }
   }

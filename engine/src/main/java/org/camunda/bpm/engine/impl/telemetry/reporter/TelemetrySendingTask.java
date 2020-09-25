@@ -45,6 +45,7 @@ import org.camunda.bpm.engine.impl.interceptor.CommandContext;
 import org.camunda.bpm.engine.impl.interceptor.CommandExecutor;
 import org.camunda.bpm.engine.impl.metrics.Meter;
 import org.camunda.bpm.engine.impl.metrics.MetricsRegistry;
+import org.camunda.bpm.engine.impl.persistence.entity.PropertyEntity;
 import org.camunda.bpm.engine.impl.telemetry.CommandCounter;
 import org.camunda.bpm.engine.impl.telemetry.TelemetryLogger;
 import org.camunda.bpm.engine.impl.telemetry.TelemetryRegistry;
@@ -65,6 +66,7 @@ public class TelemetrySendingTask extends TimerTask {
 
   protected static final TelemetryLogger LOG = ProcessEngineLogger.TELEMETRY_LOGGER;
   protected static final Set<String> METRICS_TO_REPORT = new HashSet<>();
+  protected static final String TELEMETRY_INIT_MESSAGE_SENT_NAME = "camunda.telemetry.initial.message.sent";
 
   static {
     METRICS_TO_REPORT.add(ROOT_PROCESS_INSTANCE_START);
@@ -146,25 +148,44 @@ public class TelemetrySendingTask extends TimerTask {
   }
 
   protected void sendInitialMessage() {
-    int triesLeft = telemetryRequestRetries + 1;
-    boolean requestSuccessful = false;
-    do {
-      try {
-        triesLeft--;
+    /*
+     * synchronize on init message lock property to avoid sending the
+     * message twice in case another node in the cluster toggled the value
+     * and successfully sent the message already
+     */
+    commandExecutor.execute(new org.camunda.bpm.engine.impl.interceptor.Command<Void>() {
 
-        Data initData = new Data(staticData.getInstallation(), new Product(staticData.getProduct()));
-        Internals internals = new Internals();
-        internals.setTelemetryEnabled(commandExecutor.execute(new IsTelemetryEnabledCmd()));
-        initData.getProduct().setInternals(internals);
+      @Override
+      public Void execute(CommandContext commandContext) {
+        commandContext.getPropertyManager().acquireExclusiveLockForTelemetryInitialMessage();
+        if (null == commandContext.getPropertyManager().findPropertyById(TELEMETRY_INIT_MESSAGE_SENT_NAME)) {
+          // message has not been sent yet
+          int triesLeft = telemetryRequestRetries + 1;
+          boolean requestSuccessful = false;
+          do {
+            try {
+              triesLeft--;
 
-        sendData(initData, true);
+              Data initData = new Data(staticData.getInstallation(), new Product(staticData.getProduct()));
+              Internals internals = new Internals();
+              internals.setTelemetryEnabled(new IsTelemetryEnabledCmd().execute(commandContext));
+              initData.getProduct().setInternals(internals);
 
-        requestSuccessful = true;
-        sendInitialMessage = false;
-      } catch (Exception e) {
-        LOG.exceptionWhileSendingTelemetryData(e, true);
+              sendData(initData, true);
+              commandContext.getPropertyManager().insert(new PropertyEntity(TELEMETRY_INIT_MESSAGE_SENT_NAME, "true"));
+              requestSuccessful = true;
+              sendInitialMessage = false;
+            } catch (Exception e) {
+              LOG.exceptionWhileSendingTelemetryData(e, true);
+            }
+          } while (!requestSuccessful && triesLeft > 0);
+        } else {
+          // message has already been sent by another node
+          sendInitialMessage = false;
+        }
+        return null;
       }
-    } while (!requestSuccessful && triesLeft > 0);
+    });
   }
 
   protected void updateStaticData() {

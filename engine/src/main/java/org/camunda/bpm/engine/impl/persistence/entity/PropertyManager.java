@@ -57,4 +57,9 @@ public class PropertyManager extends AbstractManager {
     getDbEntityManager().lock("lockInstallationIdLockProperty");
   }
 
+  public void acquireExclusiveLockForTelemetryInitialMessage() {
+    // We lock a special telemetry initial message lock property
+    getDbEntityManager().lock("lockTelemetryInitialMessageLockProperty");
+  }
+
 }
